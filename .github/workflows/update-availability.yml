@@ -2,8 +2,11 @@ name: Update court availability
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/15 6-23 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   update:
