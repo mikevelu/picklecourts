@@ -8,47 +8,16 @@ from zoneinfo import ZoneInfo
 API_BASE = "https://nll.leisurecloud.net/AWS/api"
 LOCAL_TZ = ZoneInfo("Europe/London")
 
+API_KEY = os.environ.get("PICKLECOURTS_API_KEY")
+if not API_KEY:
+    sys.exit("Missing environment variable: PICKLECOURTS_API_KEY")
 
-def require_env(name):
-    value = os.environ.get(name)
-    if not value:
-        sys.exit(f"Missing environment variable: {name}")
-    return value
-
-
-API_KEY = require_env("PICKLECOURTS_API_KEY")
-USERNAME = require_env("PICKLECOURTS_USERNAME")
-PASSWORD = require_env("PICKLECOURTS_PASSWORD")
+HEADERS = {"AuthenticationKey": API_KEY}
 
 
-def auth_headers(token=None):
-    headers = {
-        "AuthenticationKey": API_KEY,
-        "user": USERNAME,
-        "pw": PASSWORD,
-    }
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    return headers
-
-
-def get_token():
-    resp = requests.get(f"{API_BASE}/token?locale=en_GB", headers=auth_headers())
-    if not resp.ok:
-        sys.exit(f"Authentication failed (HTTP {resp.status_code}). Check your credentials.")
-
-    data = resp.json()
-    if "jwtToken" not in data:
-        sys.exit(
-            f"Authentication failed: no token in response. Check your credentials.\n"
-            f"Response: {json.dumps(data, indent=2)}"
-        )
-    return data["jwtToken"]
-
-
-def fetch_activities(token):
+def fetch_activities():
     resp = requests.get(
-        f"{API_BASE}/activity/list?locale=en_GB", headers=auth_headers(token)
+        f"{API_BASE}/activity/list?locale=en_GB", headers=HEADERS
     )
     if not resp.ok:
         sys.exit(f"Failed to fetch activity list (HTTP {resp.status_code})")
@@ -104,10 +73,10 @@ def parse_available_slots(payload):
     }
 
 
-def fetch_availability(token, activity, from_utc, to_utc):
+def fetch_availability(activity, from_utc, to_utc):
     resp = requests.get(
         f"{API_BASE}/activity/availability",
-        headers=auth_headers(token),
+        headers=HEADERS,
         params={
             "locale": "en_GB",
             "fromUTC": from_utc,
@@ -122,26 +91,25 @@ def fetch_availability(token, activity, from_utc, to_utc):
     return resp.json()
 
 
-def get_all_availability(token, activities):
+def get_all_availability(activities):
     from_utc, to_utc = seven_day_window_utc()
 
     results = {}
     for activity in activities:
         label = f"{activity['name']} | {activity['category']}"
-        raw = fetch_availability(token, activity, from_utc, to_utc)
+        raw = fetch_availability(activity, from_utc, to_utc)
         results[label] = parse_available_slots(raw)
 
     return results
 
 
 def main():
-    token = get_token()
-    activities = find_pickleball_activities(fetch_activities(token))
+    activities = find_pickleball_activities(fetch_activities())
 
     if not activities:
         sys.exit("No pickleball activities found. The API response may have changed.")
 
-    availability = get_all_availability(token, activities)
+    availability = get_all_availability(activities)
     print(json.dumps(availability, indent=4))
 
 
