@@ -23,7 +23,7 @@ jobs:
       - name: Generate index.html
         env:
           PICKLECOURTS_API_KEY: ${{ secrets.PICKLECOURTS_API_KEY }}
-        run: python3 get-availability.py | python3 generate-html.py > index.html
+        run: python3 get_availability.py | python3 generate_html.py > index.html
 
       - name: Commit and push if changed
         run: |
