@@ -5,19 +5,12 @@ import requests
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-API_BASE = "https://nll.leisurecloud.net/AWS/api"
 LOCAL_TZ = ZoneInfo("Europe/London")
 
-API_KEY = os.environ.get("PICKLECOURTS_API_KEY")
-if not API_KEY:
-    sys.exit("Missing environment variable: PICKLECOURTS_API_KEY")
 
-HEADERS = {"AuthenticationKey": API_KEY}
-
-
-def fetch_activities():
+def fetch_activities(api_base, headers):
     resp = requests.get(
-        f"{API_BASE}/activity/list?locale=en_GB", headers=HEADERS
+        f"{api_base}/activity/list?locale=en_GB", headers=headers
     )
     if not resp.ok:
         sys.exit(f"Failed to fetch activity list (HTTP {resp.status_code})")
@@ -40,10 +33,10 @@ def find_pickleball_activities(payload):
     return [a for a in all_activities(payload) if "pickle" in a["name"].lower()]
 
 
-def seven_day_window_utc():
-    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-    end = now + timedelta(days=7)
-    return int(now.timestamp()), int(end.timestamp())
+def seven_day_window_utc(now):
+    start = now.replace(minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=7)
+    return int(start.timestamp()), int(end.timestamp())
 
 
 def epoch_to_local(epoch_seconds):
@@ -73,44 +66,70 @@ def parse_available_slots(payload):
     }
 
 
-def fetch_availability(activity, from_utc, to_utc):
+def fetch_availability(api_base, headers, activity_id, from_utc, to_utc):
     resp = requests.get(
-        f"{API_BASE}/activity/availability",
-        headers=HEADERS,
+        f"{api_base}/activity/availability",
+        headers=headers,
         params={
             "locale": "en_GB",
             "fromUTC": from_utc,
             "toUTC": to_utc,
-            "activityId": activity["id"],
+            "activityId": activity_id,
         },
     )
     if not resp.ok:
         sys.exit(
-            f"Failed to fetch availability for {activity['name']} (HTTP {resp.status_code})"
+            f"Failed to fetch availability (HTTP {resp.status_code})"
         )
     return resp.json()
 
 
-def get_all_availability(activities):
-    from_utc, to_utc = seven_day_window_utc()
+def fetch_activity_info(api_base, headers, activity_id):
+    resp = requests.get(
+        f"{api_base}/activity/info",
+        headers=headers,
+        params={"locale": "en_GB", "activityId": activity_id},
+    )
+    if not resp.ok:
+        return {}
+    return resp.json()
 
-    results = {}
-    for activity in activities:
-        label = f"{activity['name']} | {activity['category']}"
-        raw = fetch_availability(activity, from_utc, to_utc)
-        results[label] = parse_available_slots(raw)
 
-    return results
+def build_venue_result(activity, availability_payload, info_payload):
+    """Pure: transform raw API payloads into our venue data structure."""
+    label = f"{activity['name']} | {activity['category']}"
+    act_info = info_payload.get("activity", {})
+    return label, {
+        "dates": parse_available_slots(availability_payload),
+        "price": act_info.get("price", ""),
+        "priceDesc": act_info.get("priceDesc", ""),
+        "duration": act_info.get("d", 0),
+    }
 
 
 def main():
-    activities = find_pickleball_activities(fetch_activities())
+    api_key = os.environ.get("PICKLECOURTS_API_KEY")
+    if not api_key:
+        sys.exit("Missing environment variable: PICKLECOURTS_API_KEY")
+    api_base = "https://nll.leisurecloud.net/AWS/api"
+    headers = {"AuthenticationKey": api_key}
+
+    activities = find_pickleball_activities(fetch_activities(api_base, headers))
 
     if not activities:
         sys.exit("No pickleball activities found. The API response may have changed.")
 
-    availability = get_all_availability(activities)
-    print(json.dumps(availability, indent=4))
+    now = datetime.now(timezone.utc)
+    from_utc, to_utc = seven_day_window_utc(now)
+
+    results = {}
+    for activity in activities:
+        raw = fetch_availability(api_base, headers, activity["id"], from_utc, to_utc)
+        info = fetch_activity_info(api_base, headers, activity["id"])
+        label, venue_data = build_venue_result(activity, raw, info)
+        results[label] = venue_data
+
+    print(json.dumps(results, indent=4))
 
 
 if __name__ == "__main__":

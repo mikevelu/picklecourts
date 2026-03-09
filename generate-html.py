@@ -41,14 +41,19 @@ def format_date(date_str):
     return date.strftime("%a %-d %b")
 
 
-def generate_html(data):
-    now = datetime.now(LOCAL_TZ)
-    timestamp = now.strftime("%-d %B %Y, %H:%M")
+def generate_html(data, timestamp):
 
     venues = []
-    for label, dates in data.items():
+    for label, info in data.items():
         name = venue_display_name(label)
-        venues.append({"name": name, "slug": venue_slug(name), "dates": dates})
+        venues.append({
+            "name": name,
+            "slug": venue_slug(name),
+            "dates": info.get("dates", {}),
+            "price": info.get("price", ""),
+            "priceDesc": info.get("priceDesc", ""),
+            "duration": info.get("duration", 0),
+        })
     venues.sort(key=lambda v: v["name"])
 
     lines = []
@@ -64,13 +69,18 @@ def generate_html(data):
     lines.append("    h2 {")
     lines.append("      position: sticky;")
     lines.append("      top: 0;")
+    lines.append("      z-index: 2;")
     lines.append("      background: white;")
     lines.append("      padding: 4px 0;")
     lines.append("      margin: 0;")
     lines.append("    }")
+    lines.append("    h2 small {")
+    lines.append("      font-weight: normal;")
+    lines.append("    }")
     lines.append("    h3 {")
     lines.append("      position: sticky;")
-    lines.append("      top: 1.5em;")
+    lines.append("      top: 3.3em;")
+    lines.append("      z-index: 1;")
     lines.append("      background: white;")
     lines.append("      padding: 4px 0;")
     lines.append("      margin: 0;")
@@ -99,7 +109,12 @@ def generate_html(data):
     # Venue sections
     for venue in venues:
         lines.append("")
-        lines.append(f'<h2 id="{venue["slug"]}">{venue["name"]}</h2>')
+        lines.append(f'<section>')
+        h2 = f'<h2 id="{venue["slug"]}">{venue["name"]}'
+        if venue["price"]:
+            h2 += f'<br><small>{venue["price"]} / {venue["duration"]} mins</small>'
+        h2 += '</h2>'
+        lines.append(h2)
         lines.append("")
 
         for date_str, courts in venue["dates"].items():
@@ -114,6 +129,7 @@ def generate_html(data):
             lines.append("")
 
         lines.append('<p><a href="#top">Back to top</a></p>')
+        lines.append('</section>')
         lines.append("<hr>")
 
     lines.append("")
@@ -125,7 +141,8 @@ def generate_html(data):
 
 def main():
     data = json.load(sys.stdin)
-    print(generate_html(data))
+    timestamp = datetime.now(LOCAL_TZ).strftime("%-d %B %Y, %H:%M")
+    print(generate_html(data, timestamp))
 
 
 if __name__ == "__main__":
