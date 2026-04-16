@@ -33,9 +33,9 @@ def find_pickleball_activities(payload):
     return [a for a in all_activities(payload) if "pickle" in a["name"].lower()]
 
 
-def seven_day_window_utc(now):
+def fourteen_day_window_utc(now):
     start = now.replace(minute=0, second=0, microsecond=0)
-    end = start + timedelta(days=7)
+    end = start + timedelta(days=14)
     return int(start.timestamp()), int(end.timestamp())
 
 
@@ -120,7 +120,7 @@ def main():
         sys.exit("No pickleball activities found. The API response may have changed.")
 
     now = datetime.now(timezone.utc)
-    from_utc, to_utc = seven_day_window_utc(now)
+    from_utc, to_utc = fourteen_day_window_utc(now)
 
     results = {}
     for activity in activities:

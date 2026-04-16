@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from get_availability import (
     all_activities,
     find_pickleball_activities,
-    seven_day_window_utc,
+    fourteen_day_window_utc,
     epoch_to_local,
     parse_available_slots,
     build_venue_result,
@@ -85,20 +85,20 @@ def test_find_pickleball_activities_no_matches():
     assert find_pickleball_activities(payload) == []
 
 
-# --- seven_day_window_utc ---
+# --- fourteen_day_window_utc ---
 
-def test_seven_day_window_utc_known_datetime():
+def test_fourteen_day_window_utc_known_datetime():
     now = datetime(2026, 3, 9, 14, 35, 22, 123456, tzinfo=timezone.utc)
-    start, end = seven_day_window_utc(now)
+    start, end = fourteen_day_window_utc(now)
     expected_start = datetime(2026, 3, 9, 14, 0, 0, tzinfo=timezone.utc)
-    expected_end = datetime(2026, 3, 16, 14, 0, 0, tzinfo=timezone.utc)
+    expected_end = datetime(2026, 3, 23, 14, 0, 0, tzinfo=timezone.utc)
     assert start == int(expected_start.timestamp())
     assert end == int(expected_end.timestamp())
 
 
-def test_seven_day_window_utc_zeroes_minutes_seconds():
+def test_fourteen_day_window_utc_zeroes_minutes_seconds():
     now = datetime(2026, 1, 1, 0, 59, 59, 999999, tzinfo=timezone.utc)
-    start, _ = seven_day_window_utc(now)
+    start, _ = fourteen_day_window_utc(now)
     dt = datetime.fromtimestamp(start, tz=timezone.utc)
     assert dt.minute == 0
     assert dt.second == 0

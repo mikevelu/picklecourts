@@ -1,3 +1,5 @@
+import re
+
 from generate_html import venue_display_name, venue_slug, format_date, generate_html
 
 
@@ -79,13 +81,13 @@ def test_generate_html_contains_venue_names_and_slots():
 def test_generate_html_venues_sorted_alphabetically():
     data = {
         "Wishaw Pickleball | Court Hire": {
-            "dates": {},
+            "dates": {"2026-03-09": {"Court 1": ["10:00"]}},
             "price": "",
             "priceDesc": "",
             "duration": 0,
         },
         "Airdrie L.C Pickleball | Racquet Sports": {
-            "dates": {},
+            "dates": {"2026-03-09": {"Court A": ["09:00"]}},
             "price": "",
             "priceDesc": "",
             "duration": 0,
@@ -102,3 +104,92 @@ def test_generate_html_empty_data():
     assert "PickleCourts" in html
     assert "<html" in html
     assert "</html>" in html
+
+
+def test_generate_html_groups_by_day():
+    data = {
+        "Wishaw Pickleball | Court Hire": {
+            "dates": {"2026-03-09": {"Court 1": ["10:00"]}},
+            "price": "", "priceDesc": "", "duration": 0,
+        },
+        "Airdrie L.C Pickleball | Racquet Sports": {
+            "dates": {"2026-03-09": {"Court A": ["09:00"]}},
+            "price": "", "priceDesc": "", "duration": 0,
+        },
+    }
+    html = generate_html(data, "now")
+    date_pos = html.index('id="date-2026-03-09"')
+    airdrie_pos = html.index("Airdrie Leisure Centre")
+    wishaw_pos = html.index("Wishaw")
+    assert date_pos < airdrie_pos < wishaw_pos
+
+
+def test_generate_html_dates_in_chronological_order():
+    data = {
+        "Wishaw Pickleball | Court Hire": {
+            "dates": {
+                "2026-03-11": {"Court 1": ["10:00"]},
+                "2026-03-09": {"Court 1": ["10:00"]},
+                "2026-03-10": {"Court 1": ["10:00"]},
+            },
+            "price": "", "priceDesc": "", "duration": 0,
+        },
+    }
+    html = generate_html(data, "now")
+    pos_09 = html.index('id="date-2026-03-09"')
+    pos_10 = html.index('id="date-2026-03-10"')
+    pos_11 = html.index('id="date-2026-03-11"')
+    assert pos_09 < pos_10 < pos_11
+
+
+def test_generate_html_date_headings_are_h2_venues_are_h3():
+    data = {
+        "Wishaw Pickleball | Court Hire": {
+            "dates": {"2026-03-09": {"Court 1": ["10:00"]}},
+            "price": "", "priceDesc": "", "duration": 0,
+        },
+    }
+    html = generate_html(data, "now")
+    assert '<h2 id="date-2026-03-09"' in html
+    assert '<h3 id="date-2026-03-09-wishaw"' in html
+
+
+def test_generate_html_date_anchor_in_toc():
+    data = {
+        "Wishaw Pickleball | Court Hire": {
+            "dates": {"2026-03-09": {"Court 1": ["10:00"]}},
+            "price": "", "priceDesc": "", "duration": 0,
+        },
+    }
+    html = generate_html(data, "now")
+    assert 'href="#date-2026-03-09"' in html
+    assert 'id="date-2026-03-09"' in html
+
+
+def test_generate_html_skips_venues_with_no_courts_on_a_day():
+    data = {
+        "Wishaw Pickleball | Court Hire": {
+            "dates": {"2026-03-09": {}},
+            "price": "", "priceDesc": "", "duration": 0,
+        },
+    }
+    html = generate_html(data, "now")
+    assert "date-2026-03-09" not in html
+    assert "Mon 9 Mar" not in html
+
+
+def test_generate_html_price_appears_with_venue_h3():
+    data = {
+        "Wishaw Pickleball | Court Hire": {
+            "dates": {"2026-03-09": {"Court 1": ["10:00"]}},
+            "price": "£5.00",
+            "priceDesc": "per session",
+            "duration": 60,
+        },
+    }
+    html = generate_html(data, "now")
+    # Price must appear inside an <h3>...</h3>, not an <h2>
+    h3_match = re.search(r"<h3[^>]*>.*?£5\.00.*?</h3>", html)
+    assert h3_match is not None
+    h2_match = re.search(r"<h2[^>]*>.*?£5\.00.*?</h2>", html)
+    assert h2_match is None

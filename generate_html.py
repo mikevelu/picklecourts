@@ -35,6 +35,11 @@ def venue_slug(name):
     return name.lower().replace(" ", "-")
 
 
+def date_slug(date_str):
+    """Turn '2026-04-16' into 'date-2026-04-16'."""
+    return f"date-{date_str}"
+
+
 def format_date(date_str):
     """Turn '2026-03-02' into 'Mon 2 Mar'."""
     date = datetime.strptime(date_str, "%Y-%m-%d")
@@ -56,6 +61,23 @@ def generate_html(data, timestamp):
         })
     venues.sort(key=lambda v: v["name"])
 
+    days = {}  # date_str -> list of venue rows
+    for venue in venues:
+        for date_str, courts in venue["dates"].items():
+            if not courts:           # skip venues with no slots on that day
+                continue
+            days.setdefault(date_str, []).append({
+                "name": venue["name"],
+                "slug": venue["slug"],
+                "price": venue["price"],
+                "priceDesc": venue["priceDesc"],
+                "duration": venue["duration"],
+                "courts": courts,
+            })
+    sorted_dates = sorted(days.keys())
+    for d in sorted_dates:
+        days[d].sort(key=lambda v: v["name"])
+
     lines = []
 
     # Head
@@ -74,12 +96,12 @@ def generate_html(data, timestamp):
     lines.append("      padding: 4px 0;")
     lines.append("      margin: 0;")
     lines.append("    }")
-    lines.append("    h2 small {")
+    lines.append("    h3 small {")
     lines.append("      font-weight: normal;")
     lines.append("    }")
     lines.append("    h3 {")
     lines.append("      position: sticky;")
-    lines.append("      top: 3.3em;")
+    lines.append("      top: 1.5em;")
     lines.append("      z-index: 1;")
     lines.append("      background: white;")
     lines.append("      padding: 4px 0;")
@@ -98,33 +120,34 @@ def generate_html(data, timestamp):
     lines.append("<hr>")
     lines.append("")
 
-    # Venue navigation
+    # Date navigation
     lines.append("<ul>")
-    for venue in venues:
-        lines.append(f'  <li><a href="#{venue["slug"]}">{venue["name"]}</a></li>')
+    for date_str in sorted_dates:
+        lines.append(f'  <li><a href="#{date_slug(date_str)}">{format_date(date_str)}</a></li>')
     lines.append("</ul>")
     lines.append("")
     lines.append("<hr>")
 
-    # Venue sections
-    for venue in venues:
+    # Day-first sections
+    for date_str in sorted_dates:
+        date_id = date_slug(date_str)
         lines.append("")
-        lines.append(f'<section>')
-        h2 = f'<h2 id="{venue["slug"]}">{venue["name"]}'
-        if venue["price"]:
-            h2 += f'<br><small>{venue["price"]} / {venue["duration"]} mins</small>'
-        h2 += '</h2>'
-        lines.append(h2)
+        lines.append("<section>")
+        lines.append(f'<h2 id="{date_id}">{format_date(date_str)}</h2>')
         lines.append("")
 
-        for date_str, courts in venue["dates"].items():
-            lines.append(f"<h3>{format_date(date_str)}</h3>")
+        for venue in days[date_str]:
+            anchor = f'{date_id}-{venue["slug"]}'
+            h3 = f'<h3 id="{anchor}">{venue["name"]}'
+            if venue["price"]:
+                h3 += f' <small>({venue["price"]} / {venue["duration"]} mins)</small>'
+            h3 += '</h3>'
+            lines.append(h3)
+
             lines.append('<table border="1" cellpadding="4">')
             lines.append("<tr><th>Court</th><th>Available Slots</th></tr>")
-
-            for court, times in courts.items():
+            for court, times in venue["courts"].items():
                 lines.append(f"<tr><td>{court}</td><td>{', '.join(times)}</td></tr>")
-
             lines.append("</table>")
             lines.append("")
 
